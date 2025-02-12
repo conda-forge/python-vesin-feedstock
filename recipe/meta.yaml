@@ -1,5 +1,5 @@
 {% set name = "vesin" %}
-{% set version = "0.3.1" %}
+{% set version = "0.3.2" %}
 
 package:
   name: python-{{ name|lower }}
@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
-  sha256: 31544727118968f6e8e50b3536eba7695c12ad92e2932141fd1b40e7a032ee6e
+  sha256: 7fc156d2475eca763534a08f7e91d153c707c209bc10e8d081276b4338eb2d5a
 
 build:
   skip: true  # [py<39]
