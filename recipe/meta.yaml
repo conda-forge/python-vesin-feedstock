@@ -6,13 +6,36 @@ package:
   version: {{ version }}
 
 source:
-  url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
-  sha256: d76b8c7f21551a494c7bf7697a8c05986b8179bd2d3683f0d634537bc2fe48c0
+  - url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
+    sha256: d76b8c7f21551a494c7bf7697a8c05986b8179bd2d3683f0d634537bc2fe48c0
+    folder: vesin
+  - url: https://pypi.org/packages/source/v/vesin-torch/vesin_torch-{{ version }}.tar.gz
+    sha256: 2dda9587830b9967e70446b6f4ee7fb555218f83b7f29e5eedcf3fdc7055bff6
+    folder: vesin-torch
+    patches:
+      - use-conda-libtorch-when-cross-compiling.patch
 
 build:
-  skip: true  # [py<39]
-  script: {{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
-  number: 0
+  skip: true  # [py<310]
+  script:
+    - {{ PYTHON }} -m pip install ./vesin -vv --no-deps --no-build-isolation
+    # PyTorch is unavailable on ppc64le, where the package keeps providing the
+    # existing NumPy interface only.
+    - export VESIN_TORCH_BUILD_WITH_TORCH_VERSION={{ libtorch }}.*  # [not win and not ppc64le]
+    - export VESIN_TORCH_CMAKE_PREFIX_PATH=$PREFIX  # [not win and not ppc64le]
+    - export VESIN_TORCH_OPTIONAL_TORCH=1  # [not win and not ppc64le]
+    - set VESIN_TORCH_BUILD_WITH_TORCH_VERSION={{ libtorch }}.*  # [win]
+    - set VESIN_TORCH_CMAKE_PREFIX_PATH=%LIBRARY_PREFIX%  # [win]
+    - set VESIN_TORCH_OPTIONAL_TORCH=1  # [win]
+    - {{ PYTHON }} -m pip install ./vesin-torch -vv --no-deps --no-build-isolation  # [not ppc64le]
+  number: 1
+  # vesin_torch is optional and is loaded only after importing torch. Keep the
+  # compiled extension in this package without making LibTorch mandatory for
+  # users of the NumPy interface.
+  ignore_run_exports_from:
+    - libtorch  # [not ppc64le]
+  overlinking_ignore_patterns:
+    - "*/site-packages/vesin_torch/torch-*/*"  # [not ppc64le]
 
 requirements:
   build:
@@ -27,20 +50,28 @@ requirements:
     - cross-python_{{ target_platform }}  # [build_platform != target_platform]
   host:
     - python
-    - setuptools
+    - setuptools >=77
     - wheel
     - pip
+    - libtorch {{ libtorch }}.* cpu*  # [not ppc64le]
   run:
     - python
     - numpy
+  run_constrained:
+    # vesin_torch is ABI-compatible only with the LibTorch minor version used
+    # to build it, but neither package is required for the NumPy interface.
+    - libtorch {{ libtorch }}.*  # [not ppc64le]
+    - pytorch {{ libtorch }}.*  # [not ppc64le]
 
 test:
   imports:
     - vesin
+    - vesin_torch  # [not ppc64le]
   commands:
     - pip check
   requires:
     - pip
+    - pytorch {{ libtorch }}.* cpu*  # [not ppc64le]
 
 about:
   summary: Computing neighbor lists for atomistic system
