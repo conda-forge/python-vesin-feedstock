@@ -1,0 +1,73 @@
+diff --git a/setup.py b/setup.py
+--- a/setup.py
++++ b/setup.py
+@@ -42,7 +42,18 @@
+     """
+ 
+     def run(self):
+-        import torch
++        torch_version = os.environ.get("VESIN_TORCH_BUILD_WITH_TORCH_VERSION")
++        torch_cmake_prefix_path = os.environ.get("VESIN_TORCH_CMAKE_PREFIX_PATH")
++        if torch_cmake_prefix_path is None:
++            import torch
++
++            torch_version = torch.__version__
++            torch_cmake_prefix_path = torch.utils.cmake_prefix_path
++        elif torch_version is None:
++            raise RuntimeError(
++                "VESIN_TORCH_BUILD_WITH_TORCH_VERSION must be set together with "
++                "VESIN_TORCH_CMAKE_PREFIX_PATH"
++            )
+ 
+         source_dir = os.path.join(ROOT, "lib")
+         if not os.path.exists(source_dir):
+@@ -54,7 +65,7 @@
+         # Install the shared library in a prefix matching the torch version used to
+         # compile the code. This allows having multiple version of this shared library
+         # inside the wheel; and dynamically pick the right one.
+-        torch_major, torch_minor, *_ = torch.__version__.split(".")
++        torch_major, torch_minor, *_ = torch_version.split(".")
+         install_dir = os.path.join(
+             os.path.realpath(self.build_lib),
+             "vesin_torch",
+@@ -66,7 +77,7 @@
+         cmake_options = [
+             f"-DCMAKE_INSTALL_PREFIX={install_dir}",
+             f"-DCMAKE_BUILD_TYPE={VESIN_BUILD_TYPE}",
+-            f"-DCMAKE_PREFIX_PATH={torch.utils.cmake_prefix_path}",
++            f"-DCMAKE_PREFIX_PATH={torch_cmake_prefix_path}",
+             "-DBUILD_SHARED_LIBS=ON",
+         ]
+ 
+@@ -211,17 +222,28 @@
+         # End of Windows/MKL/PIP hack
+ 
+     try:
+-        import torch
++        forced_torch_version = os.environ.get(
++            "VESIN_TORCH_BUILD_WITH_TORCH_VERSION"
++        )
++        if forced_torch_version is None:
++            import torch
++
++            forced_torch_version = torch.__version__
+ 
+         # if we have torch, we are building a wheel, which will only be compatible with
+         # a single torch version
+-        torch_v_major, torch_v_minor, *_ = torch.__version__.split(".")
++        torch_v_major, torch_v_minor, *_ = forced_torch_version.split(".")
+         torch_version = f"== {torch_v_major}.{torch_v_minor}.*"
+     except ImportError:
+         # otherwise we are building a sdist
+         torch_version = ">= 2.1"
+ 
+-    install_requires = [f"torch {torch_version}"]
++    # Downstream packages can keep torch optional while still building the native
++    # extension against a specific LibTorch ABI.
++    if os.environ.get("VESIN_TORCH_OPTIONAL_TORCH") == "1":
++        install_requires = []
++    else:
++        install_requires = [f"torch {torch_version}"]
+ 
+     setup(
+         version=open("VERSION").read().strip(),
